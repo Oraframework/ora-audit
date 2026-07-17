@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Time Inversion Audit</title>
+<meta name="description" content="If someone audited your last 30 days and inferred what you were optimising for purely from where your time went — what would they conclude?" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0D1B2A;
+    --navy-deep:#08121C;
+    --amber:#F5A623;
+    --paper:#F0F4F8;
+    --slate:#4A5568;
+    --slate-light:#8A99AD;
+    --grid:rgba(240,244,248,.055);
+    --grid-major:rgba(240,244,248,.10);
+    --rule:rgba(240,244,248,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--navy);
+    color:var(--paper);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.6;
+    min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
+  }
+  /* Blueprint grid underlayer */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+      linear-gradient(var(--grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);
+    background-size:24px 24px, 24px 24px, 120px 120px, 120px 120px;
+    pointer-events:none;
+    z-index:0;
+  }
+  body::after{
+    content:"";
+    position:fixed; inset:0;
+    background:radial-gradient(ellipse at 50% 0%, transparent 35%, var(--navy-deep) 100%);
+    pointer-events:none; z-index:0; opacity:.9;
+  }
+  .wrap{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:0 24px 96px}
+
+  /* Header */
+  header{padding:40px 0 0;display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+  .mark{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.22em;color:var(--paper)}
+  .mark span{color:var(--amber)}
+  .meta{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate-light)}
+
+  /* Hero */
+  .hero{padding:72px 0 8px}
+  .eyebrow{
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--amber);margin-bottom:24px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h1{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:clamp(34px,6.2vw,60px);
+    line-height:1.02;letter-spacing:.01em;font-weight:400;
+    margin-bottom:24px;
+  }
+  h1 em{font-style:normal;color:var(--amber)}
+  .lede{color:var(--slate-light);font-size:17px;max-width:56ch}
+  .lede strong{color:var(--paper);font-weight:500}
+
+  /* Form */
+  .form{margin-top:56px;display:grid;gap:32px}
+  .field label{
+    display:block;font-family:'Space Mono',monospace;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;
+  }
+  .field .hint{display:block;color:var(--slate-light);font-size:14px;margin-bottom:12px}
+  textarea{
+    width:100%;background:rgba(240,244,248,.03);color:var(--paper);
+    border:1px solid var(--rule);border-radius:2px;padding:16px;
+    font-family:'Inter',sans-serif;font-size:16px;line-height:1.6;resize:vertical;
+    transition:border-color .18s ease, background .18s ease;
+  }
+  textarea::placeholder{color:#5C6B80}
+  textarea:focus{outline:none;border-color:var(--amber);background:rgba(240,244,248,.05)}
+  textarea:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  button{
+    font-family:'Space Mono',monospace;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    background:var(--amber);color:var(--navy);border:0;border-radius:2px;
+    padding:16px 28px;cursor:pointer;font-weight:700;
+    transition:transform .12s ease, filter .18s ease;
+  }
+  button:hover:not(:disabled){filter:brightness(1.08)}
+  button:active:not(:disabled){transform:translateY(1px)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button:focus-visible{outline:2px solid var(--paper);outline-offset:3px}
+  .btn-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .btn-note{font-family:'Space Mono',monospace;font-size:11px;color:var(--slate-light);letter-spacing:.06em}
+
+  /* Status */
+  .status{display:none;padding:64px 0;text-align:center}
+  .status.on{display:block}
+  .status p{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-light)}
+  .ticks{display:flex;justify-content:center;gap:6px;margin-top:20px}
+  .ticks i{width:2px;height:18px;background:var(--amber);opacity:.25;animation:tick 1.1s ease-in-out infinite}
+  .ticks i:nth-child(2){animation-delay:.12s}
+  .ticks i:nth-child(3){animation-delay:.24s}
+  .ticks i:nth-child(4){animation-delay:.36s}
+  .ticks i:nth-child(5){animation-delay:.48s}
+  @keyframes tick{0%,100%{opacity:.2;height:12px}50%{opacity:1;height:22px}}
+
+  /* Reveal */
+  .reveal{display:none}
+  .reveal.on{display:block;animation:rise .5s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .section-rule{
+    margin:56px 0 28px;display:flex;align-items:center;gap:14px;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--slate-light);
+  }
+  .section-rule::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+  /* SIGNATURE: the dimension line — the gap, drawn as an architect would annotate it */
+  .gap{margin-top:8px}
+  .plate{
+    border:1px solid var(--rule);border-radius:2px;
+    background:rgba(240,244,248,.02);padding:22px 20px;
+  }
+  .plate .tag{
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--slate-light);margin-bottom:8px;
+  }
+  .plate .val{font-size:18px;line-height:1.45}
+  .plate.evidenced{border-color:rgba(245,166,35,.5)}
+  .plate.evidenced .tag{color:var(--amber)}
+
+  .dim{position:relative;height:88px;display:flex;align-items:center;justify-content:center}
+  .dim svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .dim .line{stroke:var(--amber);stroke-width:1;stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s .25s ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .dim-label{
+    position:relative;background:var(--navy);padding:4px 12px;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--amber);border:1px solid rgba(245,166,35,.4);
+    border-radius:2px;z-index:1;
+  }
+  .gap-note{margin-top:20px;font-size:17px;line-height:1.6;color:var(--paper)}
+
+  /* Leaks */
+  .leak{border-left:2px solid var(--amber);padding:2px 0 2px 18px;margin-bottom:26px}
+  .leak h3{
+    font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--amber);font-weight:700;margin-bottom:8px;
+  }
+  .leak .ev{color:var(--slate-light);font-size:15px;font-style:italic;margin-bottom:6px}
+  .leak p.note{font-size:16px}
+
+  /* Protect */
+  .protect{border:1px dashed rgba(240,244,248,.22);border-radius:2px;padding:20px;background:rgba(240,244,248,.02)}
+  .protect .tag{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--slate-light);margin-bottom:8px}
+  .protect p{font-size:16px}
+
+  /* The question */
+  .the-q{
+    margin-top:20px;padding:32px 28px;border:1px solid var(--rule);border-radius:2px;
+    background:linear-gradient(180deg, rgba(245,166,35,.06), rgba(245,166,35,0));
+  }
+  .the-q p{font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,3.6vw,32px);line-height:1.16;letter-spacing:.01em}
+
+  /* Capture */
+  .capture{margin-top:56px;border-top:1px solid var(--rule);padding-top:36px}
+  .capture h2{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:.02em;font-weight:400;margin-bottom:10px}
+  .capture .sub{color:var(--slate-light);font-size:15px;max-width:52ch;margin-bottom:22px}
+  input[type=email]{
+    width:100%;background:rgba(240,244,248,.03);color:var(--paper);
+    border:1px solid var(--rule);border-radius:2px;padding:15px 16px;
+    font-family:'Inter',sans-serif;font-size:16px;margin-bottom:16px;
+  }
+  input[type=email]::placeholder{color:#5C6B80}
+  input[type=email]:focus{outline:none;border-color:var(--amber)}
+  input[type=email]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .consent{display:flex;gap:11px;align-items:flex-start;margin-bottom:22px}
+  .consent input{margin-top:4px;accent-color:var(--amber);width:16px;height:16px;flex:none}
+  .consent label{font-size:14px;color:var(--slate-light);line-height:1.55}
+  .msg{margin-top:16px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.06em}
+  .msg.err{color:#FF8A6B}
+  .msg.ok{color:var(--amber)}
+
+  footer{margin-top:72px;padding-top:24px;border-top:1px solid var(--rule);
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--slate)}
+  footer a{color:var(--slate-light);text-decoration:none;border-bottom:1px solid var(--rule)}
+  footer a:hover{color:var(--amber)}
+
+  @media (max-width:600px){
+    .hero{padding:48px 0 0}
+    .dim{height:72px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important}
+    .dim .line{stroke-dashoffset:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="mark">O<span>.</span>R<span>.</span>A<span>.</span></div>
+    <div class="meta">Instrument 01 / Time Inversion</div>
+  </header>
+
+  <!-- STEP 1 -->
+  <section id="step1">
+    <div class="hero">
+      <div class="eyebrow">The Time Inversion Audit</div>
+      <h1>If someone audited your last 30 days and inferred what you were optimising for — purely from where your time went — <em>what would they conclude?</em></h1>
+      <p class="lede">Not what you'd tell them. <strong>What the evidence says.</strong> Answer both honestly and this will show you the gap between the outcome you claim and the outcome your hours are actually producing. Two minutes. No account.</p>
+    </div>
+
+    <div class="form">
+      <div class="field">
+        <label for="stated">01 — The stated outcome</label>
+        <span class="hint">What would you say you're building right now? Use your own words, including the vague ones.</span>
+        <textarea id="stated" rows="3" placeholder="e.g. Getting the business off the ground. Getting properly fit again."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="actual">02 — The evidence</label>
+        <span class="hint">Where did the hours actually go these last 30 days? Calendar, screen time, the evenings. Be unflattering — vague answers produce vague audits.</span>
+        <textarea id="actual" rows="7" placeholder="e.g. Two hours most nights researching tools I never set up. Three coffees with people who wanted 'to pick my brain'. A weekend rebuilding a spreadsheet. Gym twice in four weeks. A lot of scrolling after 10pm I'd rather not add up."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button id="run">Run the audit</button>
+        <span class="btn-note">Nothing is saved unless you ask for it.</span>
+      </div>
+      <div id="err1" class="msg err"></div>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section id="loading" class="status">
+    <p>Surveying the last 30 days</p>
+    <div class="ticks"><i></i><i></i><i></i><i></i><i></i></div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section id="result" class="reveal">
+    <div class="section-rule">Findings</div>
+
+    <div class="gap">
+      <div class="plate">
+        <div class="tag">What you said you were building</div>
+        <div class="val" id="r-stated"></div>
+      </div>
+
+      <div class="dim">
+        <svg viewBox="0 0 400 88" preserveAspectRatio="none" aria-hidden="true">
+          <path class="line" d="M200 4 L200 84 M192 12 L200 4 L208 12 M192 76 L200 84 L208 76" fill="none"/>
+        </svg>
+        <span class="dim-label">The Gap</span>
+      </div>
+
+      <div class="plate evidenced">
+        <div class="tag">What the evidence says you were building</div>
+        <div class="val" id="r-evidenced"></div>
+      </div>
+
+      <p class="gap-note" id="r-gap"></p>
+    </div>
+
+    <div class="section-rule">Leak map</div>
+    <div id="r-leaks"></div>
+
+    <div class="section-rule">Do not audit this</div>
+    <div class="protect">
+      <div class="tag">Legitimate non-optimised time</div>
+      <p id="r-protect"></p>
+    </div>
+
+    <div class="section-rule">The question you're avoiding</div>
+    <div class="the-q"><p id="r-question"></p></div>
+
+    <!-- CAPTURE -->
+    <div class="capture">
+      <h2>Send this audit to yourself</h2>
+      <p class="sub">You'll forget the uncomfortable part by Thursday. That's not a character flaw — it's why the architecture exists. I'll email you this audit, plus what I write about building outcomes instead of activity.</p>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+      <div class="consent">
+        <input type="checkbox" id="consent" />
+        <label for="consent">Yes — email me this audit and occasional writing on outcome architecture. One or two a month. Unsubscribe any time.</label>
+      </div>
+      <div class="btn-row">
+        <button id="send">Email me the audit</button>
+      </div>
+      <div id="msg2" class="msg"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>O.R.A. — Outcome Realisation Architecture</span>
+    <span><a href="/privacy.html">Privacy</a> · Jeff Chandler</span>
+  </footer>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let auditPayload = null;
+
+  $('run').addEventListener('click', async () => {
+    const stated = $('stated').value.trim();
+    const actual = $('actual').value.trim();
+    $('err1').textContent = '';
+
+    if (stated.length < 4 || actual.length < 25) {
+      $('err1').textContent = 'Both fields need a real answer. The second one needs detail — that\'s where the audit comes from.';
+      return;
+    }
+
+    $('step1').style.display = 'none';
+    $('loading').classList.add('on');
+
+    try {
+      const res = await fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'analyze', stated, actual })
+      });
+      if (!res.ok) throw new Error('bad status ' + res.status);
+      const data = await res.json();
+      auditPayload = { stated, actual, result: data };
+      render(stated, data);
+    } catch (e) {
+      $('loading').classList.remove('on');
+      $('step1').style.display = 'block';
+      $('err1').textContent = 'The audit didn\'t run. Try once more — if it fails again, the fault is mine, not yours.';
+    }
+  });
+
+  function render(stated, d) {
+    $('r-stated').textContent = stated;
+    $('r-evidenced').textContent = d.evidenced_outcome || '';
+    $('r-gap').textContent = d.gap || '';
+    $('r-protect').textContent = d.protect || '';
+    $('r-question').textContent = d.question || '';
+
+    const box = $('r-leaks');
+    box.innerHTML = '';
+    (d.leaks || []).forEach(l => {
+      const el = document.createElement('div');
+      el.className = 'leak';
+      const h = document.createElement('h3');
+      h.textContent = (l.type || '') + ' Leak';
+      const ev = document.createElement('p');
+      ev.className = 'ev';
+      ev.textContent = l.evidence || '';
+      const note = document.createElement('p');
+      note.className = 'note';
+      note.textContent = l.note || '';
+      el.append(h, ev, note);
+      box.appendChild(el);
+    });
+
+    $('loading').classList.remove('on');
+    $('result').classList.add('on');
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  $('send').addEventListener('click', async () => {
+    const email = $('email').value.trim();
+    const consent = $('consent').checked;
+    const m = $('msg2');
+    m.className = 'msg';
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      m.classList.add('err'); m.textContent = 'That email address doesn\'t look right.'; return;
+    }
+    if (!consent) {
+      m.classList.add('err'); m.textContent = 'Tick the consent box and I\'ll send it.'; return;
+    }
+
+    $('send').disabled = true;
+    $('send').textContent = 'Sending…';
+
+    try {
+      const res = await fetch('/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'subscribe', email, consent: true, audit: auditPayload })
+      });
+      if (!res.ok) throw new Error('bad status');
+      m.classList.add('ok');
+      m.textContent = 'Sent. Check your inbox — and go and look at your calendar.';
+      $('send').textContent = 'Sent';
+    } catch (e) {
+      $('send').disabled = false;
+      $('send').textContent = 'Email me the audit';
+      m.classList.add('err');
+      m.textContent = 'That didn\'t send. Try again in a moment.';
+    }
+  });
+</script>
+</body>
+</html>
