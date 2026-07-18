@@ -148,7 +148,8 @@ async function sendEmail(email, audit) {
 
     <div style="background:#0D1B2A;color:#F0F4F8;border-radius:10px;padding:24px 22px;margin:24px 0">
       <p style="font-family:monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#F5A623;margin:0 0 12px">Be one of the first</p>
-      <p style="margin:0;color:#F0F4F8">I want real people using this before I trust it. I'm opening it to a small group of beta testers — <strong>no cost, no commitment</strong>, and you can walk away whenever. If you want in, just <strong style="color:#F5A623">reply to this email</strong> and I'll set you up.</p>
+      <p style="margin:0 0 18px;color:#F0F4F8">I want real people using this before I trust it. I'm opening it to a small group of beta testers — <strong>no cost, no commitment</strong>, and you can walk away whenever.</p>
+      <p style="margin:0"><a href="https://ora-audit.vercel.app/beta" style="display:inline-block;background:#F5A623;color:#0D1B2A;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px">Learn more &amp; join the beta →</a></p>
     </div>
 
     <p>— Jeff</p>
