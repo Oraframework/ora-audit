@@ -1,74 +1,141 @@
-// api/beta.js — Vercel serverless function
-// Saves a beta-tester signup to Supabase (beta_signups table) and emails a notification.
-// Reuses the same SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / RESEND_API_KEY env vars as audit.js.
-
-const esc = s => String(s || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-
-async function notify({ name, email, outcome }) {
-  const html = `<div style="font-family:-apple-system,Segoe UI,Inter,sans-serif;color:#0D1B2A;line-height:1.6">
-    <p style="font-family:monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#F5A623">New O.R.A. beta signup</p>
-    <p><strong>Name:</strong> ${esc(name) || '—'}</p>
-    <p><strong>Email:</strong> ${esc(email)}</p>
-    <p><strong>Outcome they want to build:</strong><br>${esc(outcome) || '—'}</p>
-  </div>`;
-
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`
-    },
-    body: JSON.stringify({
-      from: 'O.R.A. Beta <audit@jeffchandler.com.au>',
-      to: ['audit@jeffchandler.com.au'],
-      subject: `New beta signup: ${name || email}`,
-      html
-    })
-  });
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  try {
-    const { name, email, outcome, consent } = req.body || {};
-    if (!email || !consent) return res.status(400).json({ error: 'Email and consent required' });
-
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) throw new Error('Supabase env vars missing');
-
-    const r = await fetch(`${url}/rest/v1/beta_signups`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        Prefer: 'return=minimal'
-      },
-      body: JSON.stringify({
-        name: name ? String(name).slice(0, 200) : null,
-        email: String(email).toLowerCase().slice(0, 320),
-        outcome: outcome ? String(outcome).slice(0, 2000) : null,
-        consent: !!consent,
-        source: 'audit-email'
-      })
-    });
-
-    // 23505 = unique violation. Already signed up is a success, not an error.
-    if (!r.ok && r.status !== 409) {
-      const body = await r.text();
-      if (!body.includes('23505')) throw new Error(`Supabase ${r.status}: ${body.slice(0, 300)}`);
-    }
-
-    // Fire a notification email to audit@ (best-effort; never blocks the signup).
-    if (process.env.RESEND_API_KEY) {
-      await notify({ name, email, outcome }).catch(e => console.error('Beta notify failed:', e.message));
-    }
-
-    return res.status(200).json({ ok: true });
-  } catch (err) {
-    console.error('beta signup error:', err.message);
-    return res.status(500).json({ error: 'Signup failed' });
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join the O.R.A. Beta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0D1B2A; --amber:#F5A623; --white:#F0F4F8; --slate:#4A5568; --amber-dk:#B8791A;
   }
-}
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--navy); color:var(--white);
+    font-family:Inter,-apple-system,Segoe UI,sans-serif; line-height:1.6;
+    background-image:
+      linear-gradient(rgba(245,166,35,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,166,35,.05) 1px, transparent 1px);
+    background-size:40px 40px;
+  }
+  .wrap{max-width:720px; margin:0 auto; padding:56px 22px 80px}
+  .eyebrow{font-family:'Space Mono',monospace; font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--amber); margin:0 0 18px}
+  h1{font-family:'Bebas Neue',sans-serif; font-weight:400; font-size:56px; line-height:1.02; letter-spacing:1px; margin:0 0 20px}
+  h1 .amber{color:var(--amber)}
+  .lead{font-size:19px; color:#D7DEE8; margin:0 0 8px}
+  .section-label{font-family:'Space Mono',monospace; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--slate); margin:52px 0 16px}
+  p{margin:0 0 16px}
+  .muted{color:#AEB8C4}
+  .loop p{margin:0 0 14px; padding-left:16px; border-left:2px solid rgba(245,166,35,.4)}
+  .loop .stage{font-family:'Space Mono',monospace; font-size:13px; letter-spacing:1px; text-transform:uppercase; color:var(--amber); font-weight:700}
+  .beta-list{list-style:none; padding:0; margin:0}
+  .beta-list li{position:relative; padding-left:26px; margin:0 0 12px; color:#D7DEE8}
+  .beta-list li::before{content:"→"; position:absolute; left:0; color:var(--amber); font-weight:700}
+  form{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:28px 24px; margin-top:20px}
+  label{display:block; font-family:'Space Mono',monospace; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#AEB8C4; margin:0 0 7px}
+  input[type=text], input[type=email], textarea{
+    width:100%; background:var(--navy); border:1px solid rgba(255,255,255,.18); border-radius:8px;
+    color:var(--white); font-family:Inter,sans-serif; font-size:16px; padding:12px 14px; margin:0 0 20px;
+  }
+  input:focus, textarea:focus{outline:none; border-color:var(--amber)}
+  textarea{min-height:96px; resize:vertical}
+  .consent{display:flex; gap:10px; align-items:flex-start; margin:0 0 22px}
+  .consent input{margin-top:4px}
+  .consent label{font-family:Inter,sans-serif; text-transform:none; letter-spacing:0; font-size:14px; color:#C7D0DB; margin:0}
+  button{
+    width:100%; background:var(--amber); color:var(--navy); border:0; border-radius:8px;
+    font-family:Inter,sans-serif; font-weight:700; font-size:16px; padding:15px; cursor:pointer;
+  }
+  button:disabled{opacity:.6; cursor:default}
+  .msg{margin-top:16px; font-size:15px; min-height:22px}
+  .msg.ok{color:#7CDBA0}
+  .msg.err{color:#F5A623}
+  footer{margin-top:40px; font-size:12px; color:var(--slate)}
+  @media(max-width:520px){ h1{font-size:42px} .wrap{padding:40px 18px 64px} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">O.R.A. — Outcome Realisation Architecture</p>
+    <h1>You've seen the diagnosis.<br>Come build the <span class="amber">fix</span>.</h1>
+    <p class="lead">The Time Inversion Audit showed you the gap between the outcome you want and where your time actually goes. The O.R.A. app is the system that closes it — and I'm letting a small group in early to test it.</p>
+
+    <p class="section-label">What you'd be testing</p>
+    <p class="muted">O.R.A. isn't another to-do app or productivity tracker. It treats your outcome as something to be <em>engineered</em>, not willed into being. You don't need a manager for your time. You need an architect. It runs as a loop, in four stages:</p>
+    <div class="loop">
+      <p><span class="stage">Define</span><br>The app asks you a series of discovery questions to surface the outcome you actually want — the honest one, not the socially acceptable one.</p>
+      <p><span class="stage">Design</span><br>Engineer your environment so the right move becomes the path of least resistance.</p>
+      <p><span class="stage">Deliver</span><br>Run the smallest version of the system that still moves the needle — even on your worst week.</p>
+      <p><span class="stage">Verify</span><br>Each week, audit the architecture, not yourself. "Where did the system fail?" — never "Why did I fail?"</p>
+    </div>
+
+    <p class="section-label">What the beta involves</p>
+    <ul class="beta-list">
+      <li><strong>No cost.</strong> It's free through the beta — no card, no catch.</li>
+      <li><strong>No commitment.</strong> Walk away whenever; take your data with you.</li>
+      <li><strong>Early access</strong> to the app as it's built, and a direct line to me.</li>
+      <li><strong>Your feedback shapes it.</strong> You're helping design the thing, not just using it.</li>
+      <li><strong>Light touch</strong> — expect a check-in about once a week, no more.</li>
+    </ul>
+
+    <p class="section-label">Request your spot</p>
+    <form id="betaForm" novalidate>
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" autocomplete="name" placeholder="First name is fine">
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+
+      <label for="outcome">What outcome are you trying to build?</label>
+      <textarea id="outcome" name="outcome" placeholder="In a sentence or two — the real one."></textarea>
+
+      <div class="consent">
+        <input type="checkbox" id="consent">
+        <label for="consent">Yes — keep me posted about the O.R.A. beta and the occasional note on outcome architecture. One or two a month. Unsubscribe any time.</label>
+      </div>
+
+      <button type="submit" id="send">Request beta access →</button>
+      <div class="msg" id="msg"></div>
+    </form>
+
+    <footer>O.R.A. — Outcome Realisation Architecture. You're reaching out because you ran the Time Inversion Audit.</footer>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  $('betaForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('name').value.trim();
+    const email = $('email').value.trim();
+    const outcome = $('outcome').value.trim();
+    const consent = $('consent').checked;
+    const m = $('msg'); m.className = 'msg';
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      m.classList.add('err'); m.textContent = "That email address doesn't look right."; return;
+    }
+    if (!consent) {
+      m.classList.add('err'); m.textContent = 'Tick the box and I\'ll add you to the list.'; return;
+    }
+
+    $('send').disabled = true; $('send').textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/beta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, outcome, consent: true })
+      });
+      if (!res.ok) throw new Error('bad status');
+      m.classList.add('ok');
+      m.textContent = "You're on the list. I'll be in touch personally. — Jeff";
+      $('send').textContent = 'Done';
+    } catch (err) {
+      $('send').disabled = false; $('send').textContent = 'Request beta access →';
+      m.classList.add('err'); m.textContent = "That didn't send. Try again in a moment.";
+    }
+  });
+</script>
+</body>
+</html>
