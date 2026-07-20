@@ -1,6 +1,31 @@
 // api/beta.js — Vercel serverless function
-// Saves a beta-tester signup to Supabase (beta_signups table).
-// Reuses the same SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars as audit.js.
+// Saves a beta-tester signup to Supabase (beta_signups table) and emails a notification.
+// Reuses the same SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / RESEND_API_KEY env vars as audit.js.
+
+const esc = s => String(s || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+async function notify({ name, email, outcome }) {
+  const html = `<div style="font-family:-apple-system,Segoe UI,Inter,sans-serif;color:#0D1B2A;line-height:1.6">
+    <p style="font-family:monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#F5A623">New O.R.A. beta signup</p>
+    <p><strong>Name:</strong> ${esc(name) || '—'}</p>
+    <p><strong>Email:</strong> ${esc(email)}</p>
+    <p><strong>Outcome they want to build:</strong><br>${esc(outcome) || '—'}</p>
+  </div>`;
+
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`
+    },
+    body: JSON.stringify({
+      from: 'O.R.A. Beta <audit@jeffchandler.com.au>',
+      to: ['audit@jeffchandler.com.au'],
+      subject: `New beta signup: ${name || email}`,
+      html
+    })
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -34,6 +59,11 @@ export default async function handler(req, res) {
     if (!r.ok && r.status !== 409) {
       const body = await r.text();
       if (!body.includes('23505')) throw new Error(`Supabase ${r.status}: ${body.slice(0, 300)}`);
+    }
+
+    // Fire a notification email to audit@ (best-effort; never blocks the signup).
+    if (process.env.RESEND_API_KEY) {
+      await notify({ name, email, outcome }).catch(e => console.error('Beta notify failed:', e.message));
     }
 
     return res.status(200).json({ ok: true });
